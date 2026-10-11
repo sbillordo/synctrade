@@ -1,0 +1,18 @@
+services:
+  screener:
+    build: .
+    container_name: screener-fibo
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/data
+    # solo en localhost del server: el acceso desde fuera es por Tailscale (tailscale serve)
+    ports:
+      - "127.0.0.1:8000:8000"
+    mem_limit: 512m
+    cpus: 1.0
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"

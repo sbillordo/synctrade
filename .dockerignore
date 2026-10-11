@@ -1,0 +1,16 @@
+.env
+data
+.venv
+**/__pycache__
+**/.pytest_cache
+backend/tests
+mobile/node_modules
+mobile/dist
+mobile/.expo
+prototype
+.idea
+.agents
+.claude
+.codex
+.impeccable
+*.csv
