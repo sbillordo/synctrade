@@ -110,3 +110,20 @@ def test_drop_incomplete_daily_and_early_close():
     df = pd.DataFrame({"Close": [1, 2]}, index=[ts("2026-11-25"), ts("2026-11-27")])
     assert len(drop_incomplete(df, None, ts("2026-11-27 12:00"))) == 1
     assert len(drop_incomplete(df, None, ts("2026-11-27 13:00"))) == 2   # cierre anticipado
+
+
+def test_fib_tolerance_is_configurable_per_timeframe_and_side():
+    df = prepare(make_frame("1d"), "1d")
+    base = evaluate(df, "1d", Params())
+    assert base["tol_above"] == 2.5 and base["tol_below"] == 2.5
+    d = base["dist_pct"]  # % del cierre sobre el nivel (negativo = por debajo)
+    # el lado en el que está el precio decide: ancho en ese lado -> cumple; cerrado en ese lado -> no cumple
+    wide_side = Params(tol_above_1d=10) if d >= 0 else Params(tol_below_1d=10)
+    tight_side = Params(tol_above_1d=0, tol_below_1d=2.5) if d > 0 else Params(tol_above_1d=2.5, tol_below_1d=0)
+    assert evaluate(df, "1d", wide_side)["c_fib"]
+    if d != 0:
+        assert not evaluate(df, "1d", tight_side)["c_fib"]
+    # la tolerancia del otro lado y la de otra temporalidad no afectan
+    other = Params(tol_below_1d=0) if d >= 0 else Params(tol_above_1d=0)
+    assert evaluate(df, "1d", other)["c_fib"] == base["c_fib"]
+    assert evaluate(df, "1d", Params(tol_above_1h=0.1))["tol_above"] == 2.5

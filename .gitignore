@@ -21,3 +21,5 @@ __pycache__/
 .vscode/
 .impeccable/
 data/screener.db
+# datos de ejecución (base de datos y caché): no se versionan
+/data/

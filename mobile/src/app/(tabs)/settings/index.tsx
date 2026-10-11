@@ -6,7 +6,7 @@ import { Button, Chip, Icon, Row, Section, Segmented, T } from '@/components/ui'
 import { api, getServerUrl, setServerUrl, type Params } from '@/lib/api';
 import { fmt } from '@/lib/conditions';
 import { disablePush, enablePush, pushEnabled } from '@/lib/notifications';
-import { radius, type, useColors } from '@/lib/theme';
+import { radius, setThemePref, type, type ThemePref, useColors, useThemePref } from '@/lib/theme';
 
 function Stepper({ label, hint, value, step, min, max, digits = 0, onChange }: {
   label: string; hint?: string; value: number; step: number; min: number; max: number; digits?: number; onChange: (v: number) => void;
@@ -32,8 +32,12 @@ function Stepper({ label, hint, value, step, min, max, digits = 0, onChange }: {
   );
 }
 
+const THEMES: ThemePref[] = ['system', 'dark', 'light'];
+const THEME_LABELS = ['System', 'Night', 'Day'];
+
 export default function SettingsScreen() {
   const c = useColors();
+  const themePref = useThemePref();
   const qc = useQueryClient();
   const [url, setUrl] = useState(getServerUrl());
   const [conn, setConn] = useState<string | null>(null);
@@ -100,6 +104,12 @@ export default function SettingsScreen() {
         </Row>
       </Section>
 
+      <Section title="Appearance" aside="Saved on this device">
+        <Row first>
+          <Segmented values={THEME_LABELS} index={THEMES.indexOf(themePref)} onChange={(i) => setThemePref(THEMES[i])} style={{ flex: 1 }} />
+        </Row>
+      </Section>
+
       <Section title="Notifications">
         <Row first>
           <View style={{ flex: 1 }}>
@@ -122,6 +132,12 @@ export default function SettingsScreen() {
             <T kind="body" style={{ flex: 1 }}>Fib levels</T>
             {[0.5, 0.618, 0.786].map((l) => <Chip key={l} label={String(l)} on={p.niveles.includes(l)} onPress={() => level(l)} />)}
           </Row>
+          <Stepper label="Fib 1h · above level" hint="price still approaching the level" value={p.tol_above_1h} step={0.5} min={0} max={10} digits={1} onChange={(v) => setP({ ...p, tol_above_1h: v })} />
+          <Stepper label="Fib 4h · above level" hint="price still approaching the level" value={p.tol_above_4h} step={0.5} min={0} max={10} digits={1} onChange={(v) => setP({ ...p, tol_above_4h: v })} />
+          <Stepper label="Fib 1d · above level" hint="price still approaching the level" value={p.tol_above_1d} step={0.5} min={0} max={10} digits={1} onChange={(v) => setP({ ...p, tol_above_1d: v })} />
+          <Stepper label="Fib 1h · below level" hint="price already past the level" value={p.tol_below_1h} step={0.5} min={0} max={10} digits={1} onChange={(v) => setP({ ...p, tol_below_1h: v })} />
+          <Stepper label="Fib 4h · below level" hint="price already past the level" value={p.tol_below_4h} step={0.5} min={0} max={10} digits={1} onChange={(v) => setP({ ...p, tol_below_4h: v })} />
+          <Stepper label="Fib 1d · below level" hint="price already past the level" value={p.tol_below_1d} step={0.5} min={0} max={10} digits={1} onChange={(v) => setP({ ...p, tol_below_1d: v })} />
           <Stepper label="RSI about to touch" value={p.rsi_cerca} step={1} min={20} max={50} onChange={(v) => setP({ ...p, rsi_cerca: v })} />
           <Stepper label="RSI lower band" value={p.rsi_banda} step={1} min={10} max={40} onChange={(v) => setP({ ...p, rsi_banda: v })} />
           <Stepper label="Bars to look back" hint="for the band touch" value={p.rsi_velas} step={1} min={1} max={20} onChange={(v) => setP({ ...p, rsi_velas: v })} />

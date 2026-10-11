@@ -37,17 +37,21 @@ export type Gauge = { met: boolean; x: number; tick: number | null; value: strin
 //   EWO: 0 at the tick (quarter), more negative further right
 //   GAP: no scale, full when there is no open gap
 export function gauges(s: Setup): Record<Cond, Gauge> {
-  const tol = TOL[s.tf];
+  const tolDefault = TOL[s.tf];
+  // the fib tolerance is user-set per side of the level; the POC scale keeps the default
+  const tolUp = s.tol_above ?? tolDefault;
+  const tolDn = s.tol_below ?? tolDefault;
+  const tol = s.dist_pct >= 0 ? tolUp : tolDn;
   const gap = ((s.poc - Math.max(s.nivel, s.precio)) / s.precio) * 100;
   const rsiEff = s.rsi_min <= 30 ? Math.min(s.rsi, s.rsi_min) : s.rsi;
   const open = s.gaps?.length ?? 0;
   return {
     fib: {
-      met: s.c_fib, x: clamp(1 - Math.abs(s.dist_pct) / (2 * tol)), tick: 0.5, value: pct(s.dist_pct), long: pct(s.dist_pct, 2),
-      rule: `Price within ±${tol}% of the ${s.fib} (${fmt(s.nivel)})`, extra: `level ${fmt(s.nivel)}`,
+      met: s.c_fib, x: clamp(tol ? 1 - Math.abs(s.dist_pct) / (2 * tol) : s.dist_pct === 0 ? 1 : 0), tick: 0.5, value: pct(s.dist_pct), long: pct(s.dist_pct, 2),
+      rule: `Price within +${tolUp}% / −${tolDn}% of the ${s.fib} (${fmt(s.nivel)})`, extra: `level ${fmt(s.nivel)}`,
     },
     poc: {
-      met: s.c_poc, x: clamp(0.25 + (gap / (4 * tol)) * 0.75), tick: 0.25, value: pct(gap), long: fmt(s.poc),
+      met: s.c_poc, x: clamp(0.25 + (gap / (4 * tolDefault)) * 0.75), tick: 0.25, value: pct(gap), long: fmt(s.poc),
       rule: 'Swing point of control above the fib level and the price', extra: `${pct(gap)} vs price`,
     },
     rsi: {

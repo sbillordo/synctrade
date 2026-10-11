@@ -8,8 +8,8 @@ import { SetupChart } from '@/components/chart';
 import { ConditionStrip } from '@/components/condition-strip';
 import { TradeCalculator, tradeMath, type TradeInput } from '@/components/trade-calculator';
 import { Button, Empty, Icon, Row, Section, Segmented, T } from '@/components/ui';
-import { api, CONDS, TIMEFRAMES, type Setup, type TF } from '@/lib/api';
-import { eur, fmt, gauges, LABEL, pct } from '@/lib/conditions';
+import { api, TIMEFRAMES, type Setup, type TF } from '@/lib/api';
+import { eur, fmt, pct } from '@/lib/conditions';
 import { load, save } from '@/lib/storage';
 import { useAppState } from '@/lib/store';
 import { radius, useColors } from '@/lib/theme';
@@ -84,9 +84,16 @@ export function TickerDetail({ ticker, tfParam, embedded, onNavigate }: {
     <Stack.Screen
       options={{
         title: '',
-        headerRight: () =>
-          sequence.length > 1 && idx >= 0 ? (
-            <View style={styles.pager}>
+        headerRight: () => (
+          <View style={styles.pager}>
+            {d && (
+              <Pressable onPress={() => Linking.openURL(d.tv_urls[tf])} hitSlop={8} accessibilityRole="link" accessibilityLabel="Open in TradingView" style={[styles.tvHeader, { backgroundColor: c.accent }]}>
+                <T kind="footnote" color={c.accentInk} style={{ fontWeight: '700' }}>TradingView</T>
+                <Icon sf="arrow.up.right" web="open_in_new" size={12} color={c.accentInk} />
+              </Pressable>
+            )}
+            {sequence.length > 1 && idx >= 0 ? (
+              <>
               <T kind="footnote" tabular color={c.ink2}>{idx + 1} of {sequence.length}</T>
               <Pressable onPress={() => go(-1)} disabled={idx <= 0} hitSlop={8} accessibilityLabel="Previous setup" style={styles.headerBtn}>
                 <Icon sf="chevron.up" web="expand_less" size={18} color={idx <= 0 ? c.ink3 : c.accent} />
@@ -94,8 +101,10 @@ export function TickerDetail({ ticker, tfParam, embedded, onNavigate }: {
               <Pressable onPress={() => go(1)} disabled={idx >= sequence.length - 1} hitSlop={8} accessibilityLabel="Next setup" style={styles.headerBtn}>
                 <Icon sf="chevron.down" web="expand_more" size={18} color={idx >= sequence.length - 1 ? c.ink3 : c.accent} />
               </Pressable>
-            </View>
-          ) : null,
+              </>
+            ) : null}
+          </View>
+        ),
       }}
     />
   );
@@ -106,7 +115,6 @@ export function TickerDetail({ ticker, tfParam, embedded, onNavigate }: {
   const last = chart?.candles.at(-1)?.close ?? d.price_now ?? 0;
   const first = chart?.candles.at(-21)?.close ?? last;
   const chg = first ? (last / first - 1) * 100 : 0;
-  const g = res ? gauges({ ...res, ticker, tf }) : null;
   const sig = d.signals.find((x) => x.tf === tf && x.active);
 
   return (
@@ -193,25 +201,7 @@ export function TickerDetail({ ticker, tfParam, embedded, onNavigate }: {
           </Section>
         ) : null}
 
-        {res && g ? (
-          <Section title="Conditions" aside={`${res.cumple} of 5 met`}>
-            {CONDS.map((k, i) => (
-              <Row key={k} first={i === 0}>
-                <View style={[styles.ok, { backgroundColor: g[k].met ? c.upSoft : c.downSoft }]}>
-                  <Icon sf={g[k].met ? 'checkmark' : 'xmark'} web={g[k].met ? 'check' : 'close'} size={12} color={g[k].met ? c.up : c.down} />
-                </View>
-                <View style={{ flex: 1, gap: 1 }}>
-                  <T kind="headline">{LABEL[k]}</T>
-                  <T kind="footnote" color={c.ink2}>{g[k].rule}</T>
-                </View>
-                <View style={{ alignItems: 'flex-end', maxWidth: 140 }}>
-                  <T kind="body" tabular color={g[k].met ? c.ink : c.down} style={{ fontWeight: '600' }}>{g[k].long}</T>
-                  <T kind="caption" tabular color={c.ink2} numberOfLines={2} style={{ textAlign: 'right' }}>{g[k].extra}</T>
-                </View>
-              </Row>
-            ))}
-          </Section>
-        ) : (
+        {!res && (
           <Section>
             <Row first style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
               <T kind="headline">No setup on {tf}</T>
@@ -276,9 +266,9 @@ const styles = StyleSheet.create({
   summaryHead: { flexDirection: 'row', justifyContent: 'space-between' },
   legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginTop: -6 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  ok: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   history: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   pager: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  tvHeader: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 30, paddingHorizontal: 11, borderRadius: 15, marginRight: 6 },
   bar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   barBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   tvBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 14, borderRadius: 10 },

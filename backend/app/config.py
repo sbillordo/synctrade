@@ -38,6 +38,18 @@ class Params:
     ewo: str = "negativo"       # "negativo" | "bajando"
     gap_min_pct: float = 0.0    # tamaño mínimo de un hueco diario para contar (0 = cualquiera)
     stop_buffer: float = 0.3    # % por debajo del nivel fibo para el stop por defecto
+    # tolerancia del retroceso (% respecto al nivel) por temporalidad y lado: por encima del nivel (precio aún sin
+    # llegar, mientras se desarrolla el setup) y por debajo (ya se pasó). Más ancha = avisa antes.
+    tol_above_1h: float = TF_CONFIG["1h"]["tol"] * 100
+    tol_above_4h: float = TF_CONFIG["4h"]["tol"] * 100
+    tol_above_1d: float = TF_CONFIG["1d"]["tol"] * 100
+    tol_below_1h: float = TF_CONFIG["1h"]["tol"] * 100
+    tol_below_4h: float = TF_CONFIG["4h"]["tol"] * 100
+    tol_below_1d: float = TF_CONFIG["1d"]["tol"] * 100
+
+    def tol(self, tf: str) -> tuple[float, float]:
+        """(por encima, por debajo) del nivel fibo, como fracciones (0.012 = 1,2 %)."""
+        return getattr(self, f"tol_above_{tf}") / 100, getattr(self, f"tol_below_{tf}") / 100
 
     @classmethod
     def from_dict(cls, d: dict | None) -> "Params":

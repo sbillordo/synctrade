@@ -26,6 +26,8 @@ export type Setup = {
   nivel: number;
   precio: number;
   dist_pct: number;
+  tol_above?: number; // fib tolerance (%) above / below the level used for this result; absent in older saved results
+  tol_below?: number;
   poc: number;
   rsi: number;
   rsi_min: number;
@@ -112,6 +114,12 @@ export type Params = {
   ewo: 'negativo' | 'bajando';
   gap_min_pct: number;
   stop_buffer: number;
+  tol_above_1h: number;
+  tol_above_4h: number;
+  tol_above_1d: number;
+  tol_below_1h: number;
+  tol_below_4h: number;
+  tol_below_1d: number;
 };
 
 // on the web the app is served by the server itself; in the iPhone app the user sets the Tailscale address

@@ -87,6 +87,8 @@ def evaluate(df: pd.DataFrame, tf: str, params: Params) -> dict | None:
     target = min(params.niveles, key=lambda f: abs(last - (hi - f * (hi - lo))))
     lvl = hi - target * (hi - lo)
     dist = (last - lvl) / lvl
+    tol_up, tol_dn = params.tol(tf)
+    side_tol = tol_up if dist >= 0 else tol_dn   # tolerancia del lado en el que está el precio
 
     poc = poc_price(df.loc[lo_idx:], lo, hi)
     rsi_last = float(r.iloc[-1])
@@ -97,7 +99,7 @@ def evaluate(df: pd.DataFrame, tf: str, params: Params) -> dict | None:
     gaps = unfilled_gaps(df, lo_idx, session_open_only=tf != "1d", min_pct=params.gap_min_pct)
 
     met = {
-        "fib": abs(dist) <= cfg["tol"],
+        "fib": abs(dist) <= side_tol,
         "poc": poc > lvl and poc > last,
         "rsi": rsi_last <= params.rsi_cerca or rsi_min <= params.rsi_banda,
         "ewo": ewo_last < 0 if params.ewo == "negativo" else ewo_last < ewo_prev,
@@ -105,7 +107,7 @@ def evaluate(df: pd.DataFrame, tf: str, params: Params) -> dict | None:
     }
     # calidad continua 0..1 de cada condición (para ordenar dentro del mismo nº de condiciones)
     quality = {
-        "fib": _clip01(1 - abs(dist) / cfg["tol"]),
+        "fib": _clip01(1 - abs(dist) / side_tol) if side_tol else float(dist == 0),
         "poc": _clip01((poc - max(lvl, last)) / last / (3 * cfg["tol"])),
         "rsi": _clip01((params.rsi_cerca + 10 - rsi_min) / 30),
         "ewo": _clip01(-ewo_last / (0.03 * last)),
@@ -120,6 +122,8 @@ def evaluate(df: pd.DataFrame, tf: str, params: Params) -> dict | None:
         "nivel": round(lvl, 2),
         "precio": round(last, 2),
         "dist_pct": round(dist * 100, 2),
+        "tol_above": round(tol_up * 100, 2),
+        "tol_below": round(tol_dn * 100, 2),
         "poc": round(poc, 2),
         "rsi": round(rsi_last, 1),
         "rsi_min": round(rsi_min, 1),

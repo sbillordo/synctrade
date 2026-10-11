@@ -1,5 +1,8 @@
 // Tokens from DESIGN.md (dark is the primary appearance; light mirrors it).
-import { Platform, useColorScheme } from 'react-native';
+import { useSyncExternalStore } from 'react';
+import { Appearance, Platform, useColorScheme } from 'react-native';
+
+import { load, save } from './storage';
 
 const dark = {
   ground: '#0B0E11',
@@ -43,8 +46,28 @@ const light: typeof dark = {
 
 export type Colors = typeof dark;
 
+// Appearance preference: follow the phone, or force night/day. Stored on the device.
+export type ThemePref = 'system' | 'dark' | 'light';
+let pref: ThemePref = load('theme', 'system');
+const listeners = new Set<() => void>();
+// on iOS the override also restyles the native pieces (tab bar, header, segmented controls)
+const applyNative = () => Platform.OS !== 'web' && Appearance.setColorScheme(pref === 'system' ? 'unspecified' : pref);
+applyNative();
+
+export function setThemePref(p: ThemePref) {
+  pref = p;
+  save('theme', p);
+  applyNative();
+  listeners.forEach((l) => l());
+}
+export function useThemePref(): ThemePref {
+  return useSyncExternalStore((l) => (listeners.add(l), () => void listeners.delete(l)), () => pref, () => pref);
+}
+
 export function useColors(): Colors & { scheme: 'dark' | 'light' } {
-  const scheme = useColorScheme() === 'light' ? 'light' : 'dark';
+  const system = useColorScheme();
+  const chosen = useThemePref();
+  const scheme = chosen === 'system' ? (system === 'light' ? 'light' : 'dark') : chosen;
   return { ...(scheme === 'light' ? light : dark), scheme };
 }
 

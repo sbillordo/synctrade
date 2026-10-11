@@ -178,6 +178,12 @@ class ParamsModel(BaseModel):
     ewo: Literal["negativo", "bajando"]
     gap_min_pct: float = Field(0.0, ge=0, le=10)
     stop_buffer: float = Field(0.3, ge=0, le=5)
+    tol_above_1h: float = Field(1.2, ge=0, le=10)
+    tol_above_4h: float = Field(2.0, ge=0, le=10)
+    tol_above_1d: float = Field(2.5, ge=0, le=10)
+    tol_below_1h: float = Field(1.2, ge=0, le=10)
+    tol_below_4h: float = Field(2.0, ge=0, le=10)
+    tol_below_1d: float = Field(2.5, ge=0, le=10)
 
 
 @app.get("/api/settings")
