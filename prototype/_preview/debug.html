@@ -1,0 +1,8 @@
+<!doctype html><html><body style="margin:0"><iframe id="f" src="index.html#scan" width="390" height="844" style="border:0"></iframe><pre id="out"></pre>
+<script>
+setTimeout(() => {
+  const d = document.getElementById('f').contentDocument, w = d.documentElement.clientWidth, res = [];
+  d.querySelectorAll('#screen-scan *').forEach(el => { const r = el.getBoundingClientRect(); if (r.width && r.right > w - 15.5) res.push(el.tagName + '.' + el.className + '#' + el.id + ' right=' + r.right.toFixed(1) + ' w=' + r.width.toFixed(1)); });
+  document.getElementById('out').textContent = 'vw=' + w + '\n' + res.slice(0, 25).join('\n');
+}, 2500);
+</script></body></html>

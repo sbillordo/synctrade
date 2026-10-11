@@ -4,10 +4,6 @@ data/
 __pycache__/
 .pytest_cache/
 *.csv
-mobile/node_modules/
-mobile/dist/
-mobile/.expo/
-prototype/_preview/
 .idea/
 .agents/
 .claude
