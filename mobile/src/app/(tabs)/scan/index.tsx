@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { Button, Chip, Icon, Row, Section, T } from '@/components/ui';
-import { api, getServerUrl, TIMEFRAMES, type Scan, type TF } from '@/lib/api';
+import { api, FALLBACK_UNIVERSES, getServerUrl, TIMEFRAMES, type Scan, type TF } from '@/lib/api';
 import { useAppState } from '@/lib/store';
 import { radius, type, useColors } from '@/lib/theme';
 
@@ -80,7 +80,7 @@ export default function ScanScreen() {
       </Section>
 
       <Section title="Scan a universe">
-        {(universes.data ?? []).map((u, i) => (
+        {(universes.data?.length ? universes.data : FALLBACK_UNIVERSES).map((u, i) => (
           <Pressable key={u.id} onPress={() => setUni(u.id)} accessibilityRole="radio" accessibilityState={{ checked: uni === u.id }}>
             <Row first={i === 0}>
               <View style={{ flex: 1 }}>
@@ -91,6 +91,9 @@ export default function ScanScreen() {
             </Row>
           </Pressable>
         ))}
+        {universes.isError && (
+          <Row><T kind="footnote" color={c.down} style={{ flex: 1 }}>Couldn’t load the universe list ({(universes.error as Error).message}). Using the defaults.</T></Row>
+        )}
         <Row style={{ gap: 8 }}>
           {TIMEFRAMES.map((t) => (
             <Chip key={t} label={t} on={tfs.includes(t)} onPress={() => setTfs(tfs.includes(t) ? (tfs.length > 1 ? tfs.filter((x) => x !== t) : tfs) : [...tfs, t])} />

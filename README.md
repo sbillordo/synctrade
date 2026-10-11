@@ -72,6 +72,15 @@ npx eas-cli@latest build -p ios --profile production    # pide tu cuenta Apple D
 npx eas-cli@latest submit -p ios --latest                # sube a App Store Connect -> TestFlight
 ```
 
+Cambios de JavaScript/diseño sin nueva build (EAS Update, no gasta builds):
+
+```bash
+cd mobile
+npm run ota -- "descripción del cambio"    # equivale a: eas update --channel production --environment production
+```
+
+La app lo descarga al abrirse (a la segunda apertura se ve). Hace falta una build nueva solo si cambian librerías nativas, permisos o plugins de `app.json`, o el SDK de Expo; la huella (`runtimeVersion: fingerprint`) impide mandar una actualización a una build incompatible.
+
 En el iPhone: instala TestFlight, acepta la build, abre SyncTrade, en **Settings** pon la dirección de Tailscale del servidor (`https://<server>.<tailnet>.ts.net`) y activa **Notifications**. Tailscale tiene que estar activo en el iPhone para ver los datos; las notificaciones llegan siempre.
 
 ## Notificaciones

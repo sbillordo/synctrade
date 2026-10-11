@@ -97,6 +97,13 @@ export type Status = {
   scheduler: { id: string; name: string; next: string | null }[];
 };
 export type Universe = { id: string; label: string; count: number; updated_at: string | null };
+// Shown while the server list loads or if it can't be fetched, so a scan can always be started.
+export const FALLBACK_UNIVERSES: Universe[] = [
+  { id: 'nasdaq100', label: 'Nasdaq-100', count: 0, updated_at: null },
+  { id: 'nasdaq', label: 'NASDAQ (liquid)', count: 0, updated_at: null },
+  { id: 'sp500', label: 'S&P 500', count: 0, updated_at: null },
+  { id: 'favorites', label: 'Saved', count: 0, updated_at: null },
+];
 export type Params = {
   niveles: number[];
   rsi_cerca: number;

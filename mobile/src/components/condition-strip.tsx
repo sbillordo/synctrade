@@ -7,7 +7,7 @@ import { useColors } from '@/lib/theme';
 
 import { T } from './ui';
 
-export function ConditionStrip({ setup, rules }: { setup: Setup; rules?: Partial<Record<string, Rule>> }) {
+export function ConditionStrip({ setup, rules, labels = true }: { setup: Setup; rules?: Partial<Record<string, Rule>>; labels?: boolean }) {
   const c = useColors();
   const g = gauges(setup);
   return (
@@ -18,7 +18,7 @@ export function ConditionStrip({ setup, rules }: { setup: Setup; rules?: Partial
         const fill = x.met ? c.up : c.down;
         return (
           <View key={k} style={[styles.gauge, off && { opacity: 0.35 }]} accessible accessibilityLabel={`${LABEL[k]} ${x.value}, ${x.met ? 'met' : 'not met'}`}>
-            <T kind="label" color={c.ink2}>{LABEL[k]}</T>
+            {labels && <T kind="label" color={c.ink2}>{LABEL[k]}</T>}
             <T kind="subhead" tabular numberOfLines={1} color={x.met ? c.ink : c.down} style={{ fontWeight: '600' }}>
               {x.value}
             </T>

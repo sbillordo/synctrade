@@ -9,7 +9,7 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.CHANGE-ME.synctrade",
+      "bundleIdentifier": "com.bisabit.synctrade",
       "supportsTablet": false,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
@@ -54,7 +54,18 @@
       "reactCompiler": true
     },
     "extra": {
-      "apiUrl": ""
+      "apiUrl": "",
+      "router": {},
+      "eas": {
+        "projectId": "2077d884-c600-421e-9bbf-d3c254eb07f9"
+      }
+    },
+    "owner": "sbillordo",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/2077d884-c600-421e-9bbf-d3c254eb07f9"
     }
   }
 }
