@@ -6,7 +6,8 @@ import pandas as pd
 
 import time
 
-from . import db, notify, universe
+from . import db, universe
+from . import notify as push   # el parámetro `notify` de run() es un bool y taparía el módulo
 from .config import ALERT_MIN_COND, TF_CONFIG, TIMEFRAMES, Params
 from .core.evaluate import chart_payload, evaluate, hist_poc, prepare
 from .data.cache import OHLCVCache
@@ -74,6 +75,8 @@ class Scanner:
         if tickers is None:
             db.scan_progress(scan_id, 0, "universo")
             tickers = universe.get(universe_name, cache=self.cache)
+            if universe_name != "favorites":  # lo guardado y las listas se actualizan en cada sync
+                tickers = [*tickers, *universe.get("favorites")]
         tickers = sorted({t.strip().upper() for t in tickers if t.strip()})
         if not tickers:
             raise ValueError("universo vacío")
@@ -126,7 +129,7 @@ class Scanner:
             context = f"{universe.UNIVERSES.get(universe_name, universe_name or 'custom')} · " \
                       f"{now.strftime('%d/%m %H:%M')} NY"
             # solo se marca como avisado si el push salió: si falla, el siguiente escaneo lo reintenta
-            if notify.send_setups(to_alert, context):
+            if push.send_setups(to_alert, context):
                 self.mark_alerted(to_alert)
         db.scan_finish(scan_id, n_results=len(rows), n_new=len(to_alert))
         log.info("escaneo %s: %d tickers, %d resultados, %d alertas", scan_id, len(tickers), len(rows), len(to_alert))
@@ -166,6 +169,23 @@ class Scanner:
         if v:
             self._fx = (v, time.time())
         return v or (self._fx[0] if self._fx else None)
+
+    def quotes(self, tickers: list[str]) -> dict[str, dict]:
+        """Último precio y variación del día (velas diarias) de tickers que pueden no tener setup."""
+        tickers = sorted({t.strip().upper() for t in tickers if t.strip()})
+        stale = [t for t in tickers if (a := self.cache.age_seconds(t, "1d")) is None or a >= TICKER_FRESH_SECONDS]
+        if stale and not self.busy:
+            self.cache.update(stale, "1d")
+        out = {}
+        for t in tickers:
+            df = self.cache.load(t, "1d")
+            close = df["Close"].dropna() if df is not None else None
+            if close is None or close.empty:
+                continue
+            last = float(close.iloc[-1])
+            prev = float(close.iloc[-2]) if len(close) > 1 else None
+            out[t] = {"price": round(last, 2), "chg_pct": round((last / prev - 1) * 100, 2) if prev else None}
+        return out
 
     def ticker(self, ticker: str) -> dict:
         """Ficha de un ticker: resultado y gráfico de las 3 temporalidades, POC histórico y precio actual."""

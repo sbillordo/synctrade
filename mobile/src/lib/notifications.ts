@@ -40,4 +40,7 @@ export async function disablePush() {
   save('pushEnabled', false);
 }
 
-export type SetupsPayload = { type: 'setups'; items: { ticker: string; tf: string }[] } | { type: 'test' };
+export type SetupsPayload =
+  | { type: 'setups'; items: { ticker: string; tf: string }[] }
+  | { type: 'ticker'; ticker: string } // price alert or a position's stop / target
+  | { type: 'test' };

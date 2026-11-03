@@ -1,7 +1,8 @@
 """Notificaciones push a la app (Expo Push Service -> APNs). Sustituye a Telegram.
 
 La app registra su token con POST /api/push/register; aquí se manda un único aviso por escaneo
-con el listado de setups nuevos. Al tocarlo, la app abre el ticker (si es uno) o la lista.
+con el listado de setups nuevos (al tocarlo, la app abre el ticker si es uno o la lista) y un aviso por
+cada alerta de precio o stop / TP tocado (abre el ticker).
 """
 import logging
 
@@ -58,6 +59,21 @@ def send_setups(items: list[tuple[dict, bool]], context: str) -> bool:
         return False
     msg = format_setups(items, context)
     return _send([{"to": t, "sound": "default", **msg} for t in tokens])
+
+
+def format_event(e: dict) -> dict:
+    """Aviso de una alerta de precio. Al tocarlo la app abre el ticker."""
+    t = e["ticker"]
+    title = f"{t} {'above' if e['direction'] == 'above' else 'below'} {e['level']:,.2f}"
+    body = e["note"] or f"Last {e['last']:,.2f} · price alert"
+    return {"title": title, "body": body, "data": {"type": "ticker", "ticker": t}}
+
+
+def send_events(events: list[dict]) -> bool:
+    tokens = db.push_tokens()
+    if not events or not tokens:
+        return False
+    return _send([{"to": t, "sound": "default", **format_event(e)} for e in events[:10] for t in tokens])
 
 
 def send_test() -> bool:

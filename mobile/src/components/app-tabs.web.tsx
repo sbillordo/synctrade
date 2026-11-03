@@ -11,7 +11,8 @@ import { Icon, T } from './ui';
 const TABS = [
   { name: 'setups', label: 'Setups', icon: 'list' },
   { name: 'scan', label: 'Scan', icon: 'radar' },
-  { name: 'saved', label: 'Saved', icon: 'star' },
+  { name: 'lists', label: 'Lists', icon: 'checklist' },
+  { name: 'portfolio', label: 'Portfolio', icon: 'work' },
   { name: 'settings', label: 'Settings', icon: 'tune' },
 ] as const;
 
@@ -19,8 +20,8 @@ type RailProps = { state: { index: number; routes: { key: string; name: string }
 
 function Rail({ state, navigation }: RailProps) {
   const c = useColors();
-  const favorites = useQuery({ queryKey: ['favorites'], queryFn: api.favorites, enabled: !!getServerUrl() });
-  const saved = favorites.data?.length ?? 0;
+  const portfolio = useQuery({ queryKey: ['portfolio', 'open'], queryFn: () => api.portfolio(), enabled: !!getServerUrl() });
+  const positions = portfolio.data?.positions.length ?? 0;
   return (
     <View style={[styles.rail, { backgroundColor: c.surface, borderRightColor: c.hairline }]}>
       <View style={styles.logo}>
@@ -38,9 +39,9 @@ function Rail({ state, navigation }: RailProps) {
             style={({ hovered }: PressableStateCallbackType & { hovered?: boolean }) => [styles.item, { backgroundColor: on || hovered ? c.surfaceRaised : 'transparent' }]}>
             <Icon sf={t.icon} web={t.icon} size={20} color={on ? c.ink : c.ink2} />
             <T kind="subhead" color={on ? c.ink : c.ink2} style={{ flex: 1, fontWeight: '500' }}>{t.label}</T>
-            {t.name === 'saved' && saved > 0 && (
+            {t.name === 'portfolio' && positions > 0 && (
               <View style={[styles.badge, { backgroundColor: c.accent }]}>
-                <T kind="caption" color={c.accentInk} style={{ fontWeight: '700' }}>{saved}</T>
+                <T kind="caption" color={c.accentInk} style={{ fontWeight: '700' }}>{positions}</T>
               </View>
             )}
           </Pressable>

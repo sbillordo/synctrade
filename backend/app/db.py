@@ -1,4 +1,4 @@
-"""SQLite (stdlib): escaneos, últimos resultados, señales, universos, favoritos y ajustes."""
+"""SQLite (stdlib): escaneos, últimos resultados, señales, universos, favoritos, posiciones, alertas y ajustes."""
 import json
 import sqlite3
 from contextlib import contextmanager
@@ -60,6 +60,58 @@ CREATE TABLE IF NOT EXISTS universe_meta (
 CREATE TABLE IF NOT EXISTS favorites (
     ticker TEXT PRIMARY KEY,
     added_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS lists (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS list_items (
+    list_id INTEGER NOT NULL REFERENCES lists(id) ON DELETE CASCADE,
+    ticker TEXT NOT NULL,
+    added_at TEXT NOT NULL,
+    PRIMARY KEY (list_id, ticker)
+);
+CREATE TABLE IF NOT EXISTS names (
+    ticker TEXT PRIMARY KEY,
+    name TEXT NOT NULL
+);
+-- posiciones manuales (solo largos), de antes de leerlas de eToro: ya no se usan, se conservan los datos.
+CREATE TABLE IF NOT EXISTS positions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker TEXT NOT NULL,
+    tf TEXT,                            -- temporalidad del setup de origen (informativo)
+    opened_at TEXT NOT NULL,
+    entry REAL NOT NULL,                -- precio de compra ($)
+    shares REAL NOT NULL,               -- acciones compradas
+    eurusd REAL NOT NULL,               -- dólares por euro al comprar
+    stop REAL,
+    tp REAL,
+    stop_initial REAL,                  -- stop al abrir: base del R
+    note TEXT,
+    levels_at TEXT NOT NULL,            -- última vez que se fijó el stop o el TP (rearma sus avisos)
+    stop_alerted REAL,                  -- nivel del stop / TP ya avisado
+    tp_alerted REAL,
+    closed_at TEXT
+);
+CREATE TABLE IF NOT EXISTS position_exits (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    position_id INTEGER NOT NULL REFERENCES positions(id) ON DELETE CASCADE,
+    at TEXT NOT NULL,
+    price REAL NOT NULL,
+    shares REAL NOT NULL,
+    eurusd REAL NOT NULL
+);
+-- alertas de precio: una vez disparadas quedan en el histórico
+CREATE TABLE IF NOT EXISTS alerts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker TEXT NOT NULL,
+    price REAL NOT NULL,
+    direction TEXT NOT NULL,            -- above | below
+    note TEXT,
+    created_at TEXT NOT NULL,
+    triggered_at TEXT,
+    triggered_price REAL
 );
 CREATE TABLE IF NOT EXISTS push_tokens (
     token TEXT PRIMARY KEY,
@@ -253,6 +305,115 @@ def favorite_set(ticker: str, on: bool):
             con.execute("INSERT OR IGNORE INTO favorites VALUES (?,?)", (ticker, utcnow()))
         else:
             con.execute("DELETE FROM favorites WHERE ticker=?", (ticker,))
+
+
+# ------------------------------------------------------------------ listas de seguimiento
+def lists() -> list[dict]:
+    with connect() as con:
+        out = [{**dict(r), "tickers": []} for r in con.execute("SELECT id, name FROM lists ORDER BY id")]
+        by_id = {l["id"]: l for l in out}
+        for r in con.execute("SELECT list_id, ticker FROM list_items ORDER BY added_at, ticker"):
+            by_id[r["list_id"]]["tickers"].append(r["ticker"])
+    return out
+
+
+def list_create(name: str) -> dict:
+    with connect() as con:
+        cur = con.execute("INSERT INTO lists (name, created_at) VALUES (?,?)", (name, utcnow()))
+        return {"id": cur.lastrowid, "name": name, "tickers": []}
+
+
+def list_rename(list_id: int, name: str) -> bool:
+    with connect() as con:
+        return con.execute("UPDATE lists SET name=? WHERE id=?", (name, list_id)).rowcount > 0
+
+
+def list_delete(list_id: int) -> bool:
+    with connect() as con:
+        con.execute("DELETE FROM list_items WHERE list_id=?", (list_id,))
+        return con.execute("DELETE FROM lists WHERE id=?", (list_id,)).rowcount > 0
+
+
+def list_item_set(list_id: int, ticker: str, on: bool) -> bool:
+    with connect() as con:
+        if not con.execute("SELECT 1 FROM lists WHERE id=?", (list_id,)).fetchone():
+            return False
+        if on:
+            con.execute("INSERT OR IGNORE INTO list_items VALUES (?,?,?)", (list_id, ticker, utcnow()))
+        else:
+            con.execute("DELETE FROM list_items WHERE list_id=? AND ticker=?", (list_id, ticker))
+        return True
+
+
+def list_tickers() -> list[str]:
+    """Todos los tickers que están en alguna lista."""
+    with connect() as con:
+        return [r["ticker"] for r in con.execute("SELECT DISTINCT ticker FROM list_items ORDER BY ticker")]
+
+
+def names_get(tickers: list[str]) -> dict[str, str]:
+    if not tickers:
+        return {}
+    with connect() as con:
+        rows = con.execute(f"SELECT ticker, name FROM names WHERE ticker IN ({','.join('?' * len(tickers))})", tickers)
+        return {r["ticker"]: r["name"] for r in rows}
+
+
+def names_set(names: dict[str, str]):
+    with connect() as con:
+        con.executemany("INSERT OR REPLACE INTO names VALUES (?,?)", list(names.items()))
+
+
+# ------------------------------------------------------------------ alertas de precio
+def alerts(active: bool | None = None, ticker: str | None = None, limit: int = 200) -> list[dict]:
+    sql, args = "SELECT * FROM alerts WHERE 1=1", []
+    if active is not None:
+        sql += " AND triggered_at IS NULL" if active else " AND triggered_at IS NOT NULL"
+    if ticker:
+        sql += " AND ticker=?"
+        args.append(ticker)
+    with connect() as con:
+        rows = con.execute(sql + " ORDER BY COALESCE(triggered_at, created_at) DESC, id DESC LIMIT ?", args + [limit])
+        return [dict(r) for r in rows]
+
+
+def alert_create(ticker: str, price: float, direction: str, note: str | None = None) -> dict:
+    with connect() as con:
+        aid = con.execute("INSERT INTO alerts (ticker, price, direction, note, created_at) VALUES (?,?,?,?,?)",
+                          (ticker, price, direction, note, utcnow())).lastrowid
+        return dict(con.execute("SELECT * FROM alerts WHERE id=?", (aid,)).fetchone())
+
+
+def alert_trigger(aid: int, price: float):
+    with connect() as con:
+        con.execute("UPDATE alerts SET triggered_at=?, triggered_price=? WHERE id=? AND triggered_at IS NULL",
+                    (utcnow(), price, aid))
+
+
+def alert_delete(aid: int) -> bool:
+    with connect() as con:
+        return con.execute("DELETE FROM alerts WHERE id=?", (aid,)).rowcount > 0
+
+
+def watched_tickers() -> list[str]:
+    """Tickers con alertas activas: los únicos que vigila el comprobador de precios."""
+    with connect() as con:
+        rows = con.execute("SELECT DISTINCT ticker FROM alerts WHERE triggered_at IS NULL ORDER BY ticker")
+        return [r["ticker"] for r in rows]
+
+
+def search_tickers(q: str, limit: int = 8) -> list[str]:
+    """Tickers conocidos (universos, resultados, listas) que empiezan por q primero y luego los que lo contienen."""
+    q = "".join(ch for ch in q.upper() if ch.isalnum() or ch in ".-^=")
+    if not q:
+        return []
+    with connect() as con:
+        rows = con.execute(
+            "SELECT ticker FROM (SELECT ticker FROM universe_members UNION SELECT ticker FROM latest "
+            "UNION SELECT ticker FROM list_items UNION SELECT ticker FROM favorites) "
+            "WHERE ticker LIKE ? ORDER BY ticker LIKE ? DESC, length(ticker), ticker LIMIT ?",
+            (f"%{q}%", f"{q}%", limit)).fetchall()
+    return [r["ticker"] for r in rows]
 
 
 def setting_get(key: str, default=None):

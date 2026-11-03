@@ -73,6 +73,14 @@ def client(tmp_path, monkeypatch):
         yield c
 
 
+def test_scan_with_notifications_does_not_crash(client):
+    # los escaneos programados envían push (notify=True); un parámetro con ese nombre tapó el módulo y los rompía
+    r = client.post("/api/scans", json={"tickers": ["AAA", "BBB"], "tfs": ["1d"], "notify": True})
+    assert r.status_code == 202
+    s = wait_scan(client, r.json()["id"])
+    assert s["status"] == "done", s
+
+
 def test_api_scan_results_and_ticker(client):
     r = client.post("/api/scans", json={"tickers": ["AAA", "BBB", "NODATA"], "tfs": ["1d", "4h"]})
     assert r.status_code == 202
@@ -108,6 +116,47 @@ def test_api_favorites_and_settings(client):
     assert client.put("/api/settings", json=s).json()["params"]["rsi_cerca"] == 40
     s["ewo"] = "otro"
     assert client.put("/api/settings", json=s).status_code == 422
+
+
+def test_api_lists(client):
+    l = client.post("/api/lists", json={"name": "Tech"}).json()
+    assert l["tickers"] == []
+    assert client.put(f"/api/lists/{l['id']}/tickers/nvda").status_code == 204
+    assert client.put(f"/api/lists/{l['id']}/tickers/NVDA").status_code == 204
+    assert client.get("/api/lists").json() == [{"id": l["id"], "name": "Tech", "tickers": ["NVDA"]}]
+    from app import universe
+    assert universe.get("favorites") == ["NVDA"]
+    assert client.patch(f"/api/lists/{l['id']}", json={"name": "AI"}).status_code == 204
+    assert client.delete(f"/api/lists/{l['id']}/tickers/NVDA").status_code == 204
+    assert client.put("/api/lists/999/tickers/X").status_code == 404
+    assert client.delete(f"/api/lists/{l['id']}").status_code == 204
+    assert client.get("/api/lists").json() == []
+
+
+def test_api_search(client):
+    db.universe_set("sp500", ["AAPL", "AMAT", "NVDA", "MAA"])
+    assert client.get("/api/search", params={"q": "aa"}).json() == ["AAPL", "MAA"]
+    assert client.get("/api/search", params={"q": "nv"}).json() == ["NVDA"]
+    assert client.get("/api/search", params={"q": ""}).json() == []
+
+
+def test_quotes_and_watchlist_in_sync(client):
+    q = client.get("/api/quotes", params={"tickers": "aaa,NODATA"}).json()
+    assert set(q) == {"AAA"} and q["AAA"]["price"] > 0
+    # un ticker guardado o en una lista entra en cualquier escaneo de universo
+    db.universe_set("sp500", ["BBB"])
+    db.favorite_set("AAA", True)
+    s = wait_scan(client, client.post("/api/scans", json={"universe": "sp500", "tfs": ["1d"]}).json()["id"])
+    assert s["n_tickers"] == 2
+
+
+def test_api_names(client, monkeypatch):
+    from app import names
+    calls = []
+    monkeypatch.setattr(names, "_fetch", lambda t: calls.append(t) or {"MCD": "McDonald's Corporation"}.get(t))
+    assert client.get("/api/names", params={"tickers": "mcd,zzzz"}).json() == {"MCD": "McDonald's Corporation"}
+    client.get("/api/names", params={"tickers": "MCD"})
+    assert calls.count("MCD") == 1  # la segunda vez sale de SQLite
 
 
 def test_push_message_and_register(client):

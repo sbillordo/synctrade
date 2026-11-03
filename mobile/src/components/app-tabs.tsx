@@ -14,9 +14,13 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Label>Scan</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf={{ default: 'scope', selected: 'scope' }} md="radar" />
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="saved">
-        <NativeTabs.Trigger.Label>Saved</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf={{ default: 'star', selected: 'star.fill' }} md="star" />
+      <NativeTabs.Trigger name="lists">
+        <NativeTabs.Trigger.Label>Lists</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'list.bullet.rectangle', selected: 'list.bullet.rectangle' }} md="checklist" />
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="portfolio">
+        <NativeTabs.Trigger.Label>Portfolio</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'briefcase', selected: 'briefcase.fill' }} md="work" />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="settings">
         <NativeTabs.Trigger.Label>Settings</NativeTabs.Trigger.Label>

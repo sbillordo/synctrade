@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import db, notify, scheduler, universe
+from . import db, etoro, names, notify, scheduler, universe, watch
 from .config import SCHEDULER_ENABLED, STATIC_DIR, TIMEFRAMES, Params
 from .core.evaluate import CONDITIONS, passes
 from .links import tv_symbol, tv_url
@@ -170,6 +170,60 @@ def favorite_remove(symbol: str):
     db.favorite_set(symbol.upper(), False)
 
 
+# ------------------------------------------------------------------ listas
+@app.get("/api/quotes")
+def quotes(tickers: str = Query("", description="símbolos separados por comas")):
+    return scanner.quotes(_csv(tickers)[:60])
+
+
+@app.get("/api/names")
+def company_names(tickers: str = Query("", description="símbolos separados por comas")):
+    return names.lookup(_csv(tickers)[:60])
+
+
+@app.get("/api/search")
+def search(q: str = Query("", max_length=20)):
+    return db.search_tickers(q)
+
+
+class ListName(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
+
+
+@app.get("/api/lists")
+def lists():
+    return db.lists()
+
+
+@app.post("/api/lists", status_code=201)
+def list_create(body: ListName):
+    return db.list_create(body.name.strip())
+
+
+@app.patch("/api/lists/{list_id}", status_code=204)
+def list_rename(list_id: int, body: ListName):
+    if not db.list_rename(list_id, body.name.strip()):
+        raise HTTPException(404)
+
+
+@app.delete("/api/lists/{list_id}", status_code=204)
+def list_delete(list_id: int):
+    if not db.list_delete(list_id):
+        raise HTTPException(404)
+
+
+@app.put("/api/lists/{list_id}/tickers/{symbol}", status_code=204)
+def list_ticker_add(list_id: int, symbol: str):
+    if not db.list_item_set(list_id, symbol.strip().upper(), True):
+        raise HTTPException(404)
+
+
+@app.delete("/api/lists/{list_id}/tickers/{symbol}", status_code=204)
+def list_ticker_remove(list_id: int, symbol: str):
+    if not db.list_item_set(list_id, symbol.strip().upper(), False):
+        raise HTTPException(404)
+
+
 class ParamsModel(BaseModel):
     niveles: list[float] = Field(min_length=1)
     rsi_cerca: float = Field(ge=0, le=100)
@@ -202,6 +256,48 @@ def settings_put(p: ParamsModel):
 def fx():
     """Dólares por euro, para pasar el importe en euros a acciones."""
     return {"eurusd": scanner.fx_eurusd()}
+
+
+# ------------------------------------------------------------------ posiciones (eToro) y alertas de precio
+@app.get("/api/positions")
+def positions(status: Literal["open", "closed"] = "open", fresh: bool = False):
+    """Posiciones de eToro: abiertas con su P&L o cerradas en el último año. Importes en la divisa de la cuenta."""
+    try:
+        out = etoro.portfolio(fresh) if status == "open" else etoro.history(fresh)
+    except etoro.NotConfigured as e:
+        raise HTTPException(503, str(e))
+    except etoro.EtoroError as e:
+        raise HTTPException(502, str(e))
+    return {**out, "eurusd": scanner.fx_eurusd()}
+
+
+class AlertIn(BaseModel):
+    ticker: str = Field(min_length=1, max_length=15)
+    price: float = Field(gt=0)
+    direction: Literal["above", "below"]
+    note: str | None = Field(None, max_length=200)
+
+
+@app.get("/api/alerts")
+def alerts(status: Literal["active", "triggered", "all"] = "all", limit: int = Query(100, le=500)):
+    return db.alerts(None if status == "all" else status == "active", limit=limit)
+
+
+@app.post("/api/alerts", status_code=201)
+def alert_create(body: AlertIn):
+    return db.alert_create(body.ticker.strip().upper(), body.price, body.direction, (body.note or "").strip() or None)
+
+
+@app.delete("/api/alerts/{aid}", status_code=204)
+def alert_delete(aid: int):
+    if not db.alert_delete(aid):
+        raise HTTPException(404)
+
+
+@app.post("/api/alerts/check")
+def alerts_check():
+    """Comprobación manual (la programada corre cada 5 min en sesión)."""
+    return {"events": watch.check(scanner.source)}
 
 
 # ------------------------------------------------------------------ notificaciones push

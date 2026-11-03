@@ -15,7 +15,7 @@ export type Rule = 'count' | 'require' | 'ignore';
 export type Filters = { min: number; tfs: TF[]; rule: Record<Cond, Rule>; sort: SortKey };
 export type SortKey = 'score' | 'dist' | 'ticker';
 export const DEFAULT_FILTERS: Filters = {
-  min: 4,
+  min: 5,
   tfs: ['1h', '4h', '1d'],
   rule: { fib: 'count', poc: 'count', rsi: 'count', ewo: 'count', gap: 'count' },
   sort: 'score',
@@ -27,6 +27,9 @@ export const fmt = (v: number, d = 2) =>
 export const pct = (v: number, d = 1) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${fmt(Math.abs(v), d)}%`;
 export const sgn = (v: number, d = 2) => `${v < 0 ? '−' : ''}${fmt(Math.abs(v), d)}`;
 export const eur = (v: number, d = 2) => `${v < 0 ? '−' : ''}${fmt(Math.abs(v), d)} €`;
+/** Amount in the eToro account currency (USD unless the account says otherwise). */
+export const money = (v: number, ccy: string | null | undefined, d = 2) =>
+  `${v < 0 ? '−' : ''}${fmt(Math.abs(v), d)} ${ccy === 'USD' || !ccy ? '$' : ccy}`;
 
 export type Gauge = { met: boolean; x: number; tick: number | null; value: string; long: string; rule: string; extra: string };
 

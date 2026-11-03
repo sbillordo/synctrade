@@ -62,6 +62,7 @@ export type Chart = {
   swing: { low: { time: string | number; price: number }; high: { time: string | number; price: number } } | null;
   gaps: Gap[];
 };
+export type WatchList = { id: number; name: string; tickers: string[] };
 export type Signal = { key: string; ticker: string; tf: TF; first_seen: string; max_cumple: number; alerted_cumple: number; active: boolean };
 export type TickerDetail = {
   ticker: string;
@@ -97,6 +98,56 @@ export type Status = {
   last_scan: Scan | null;
   push_devices: number;
   scheduler: { id: string; name: string; next: string | null }[];
+};
+/** An eToro position, open or closed. Money is in the eToro account currency (USD). */
+export type Position = {
+  id: number;
+  ticker: string;         // Yahoo ticker (eToro suffixes like .RTH removed)
+  symbol: string;         // as eToro shows it
+  name: string | null;
+  is_buy: boolean;
+  leverage: number;
+  units: number;
+  open_rate: number;
+  opened_at: string;
+  amount: number | null;  // invested (the margin when leveraged)
+  pnl: number | null;     // eToro's own P&L, fees included
+  pnl_pct: number | null;
+  fees: number | null;
+  // open only
+  cfd?: boolean;
+  price?: number | null;
+  stop?: number | null;
+  tp?: number | null;
+  at_stop?: number | null; // P&L if the stop hits
+  at_tp?: number | null;
+  // closed only
+  close_rate?: number | null;
+  closed_at?: string | null;
+};
+export type Portfolio = {
+  positions: Position[];
+  currency: string | null;
+  eurusd: number | null;
+  fetched_at: number;
+  totals: { invested: number | null; pnl: number | null; value: number | null; at_stop: number | null; credit: number | null };
+};
+export type TradeHistory = {
+  positions: Position[];
+  since: string;
+  eurusd: number | null;
+  fetched_at: number;
+  totals: { pnl: number | null; wins: number; losses: number };
+};
+export type PriceAlert = {
+  id: number;
+  ticker: string;
+  price: number;
+  direction: 'above' | 'below';
+  note: string | null;
+  created_at: string;
+  triggered_at: string | null;
+  triggered_price: number | null;
 };
 export type Universe = { id: string; label: string; count: number; updated_at: string | null };
 // Shown while the server list loads or if it can't be fetched, so a scan can always be started.
@@ -170,6 +221,21 @@ export const api = {
   favorites: () => call<string[]>('/api/favorites'),
   setFavorite: (symbol: string, on: boolean) =>
     call<void>(`/api/favorites/${encodeURIComponent(symbol)}`, { method: on ? 'PUT' : 'DELETE' }),
+  quotes: (tickers: string[]) => call<Record<string, { price: number; chg_pct: number | null }>>(`/api/quotes?tickers=${encodeURIComponent(tickers.join(','))}`),
+  names: (tickers: string[]) => call<Record<string, string>>(`/api/names?tickers=${encodeURIComponent(tickers.join(','))}`),
+  search: (q: string) => call<string[]>(`/api/search?q=${encodeURIComponent(q)}`),
+  lists: () => call<WatchList[]>('/api/lists'),
+  createList: (name: string) => call<WatchList>('/api/lists', { method: 'POST', body: JSON.stringify({ name }) }),
+  renameList: (id: number, name: string) => call<void>(`/api/lists/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
+  deleteList: (id: number) => call<void>(`/api/lists/${id}`, { method: 'DELETE' }),
+  setListTicker: (id: number, symbol: string, on: boolean) =>
+    call<void>(`/api/lists/${id}/tickers/${encodeURIComponent(symbol)}`, { method: on ? 'PUT' : 'DELETE' }),
+  portfolio: (fresh = false) => call<Portfolio>(`/api/positions?status=open${fresh ? '&fresh=1' : ''}`),
+  history: (fresh = false) => call<TradeHistory>(`/api/positions?status=closed${fresh ? '&fresh=1' : ''}`),
+  alerts: () => call<PriceAlert[]>('/api/alerts'),
+  createAlert: (a: { ticker: string; price: number; direction: 'above' | 'below'; note?: string }) =>
+    call<PriceAlert>('/api/alerts', { method: 'POST', body: JSON.stringify(a) }),
+  deleteAlert: (id: number) => call<void>(`/api/alerts/${id}`, { method: 'DELETE' }),
   startScan: (body: { universe?: string; tickers?: string[]; tfs: TF[] }) =>
     call<Scan>('/api/scans', { method: 'POST', body: JSON.stringify(body) }),
   scan: (id: number) => call<Scan>(`/api/scans/${id}`),

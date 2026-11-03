@@ -75,6 +75,7 @@ class FakeSource:
 def clean_db():
     db.init()
     with db.connect() as con:
-        for table in ("scans", "latest", "signals", "universe_members", "universe_meta", "favorites", "settings"):
+        for table in ("scans", "latest", "signals", "universe_members", "universe_meta", "favorites", "names", "list_items", "lists", "settings",
+                      "alerts"):
             con.execute(f"DELETE FROM {table}")
     yield

@@ -7,8 +7,8 @@ import { radius, useColors } from '@/lib/theme';
 import { ConditionStrip } from './condition-strip';
 import { Icon, T } from './ui';
 
-export function SetupRow({ s, favorite, rules, onPress, compact, selected }: {
-  s: Setup; favorite?: boolean; rules?: Partial<Record<string, Rule>>; onPress: () => void; compact?: boolean; selected?: boolean;
+export function SetupRow({ s, name, favorite, rules, onPress, compact, selected }: {
+  s: Setup; name?: string; favorite?: boolean; rules?: Partial<Record<string, Rule>>; onPress: () => void; compact?: boolean; selected?: boolean;
 }) {
   const c = useColors();
   const full = s.cumple === 5;
@@ -29,6 +29,7 @@ export function SetupRow({ s, favorite, rules, onPress, compact, selected }: {
               <View style={[styles.tf, { backgroundColor: c.surfaceHigh }]}><T kind="label" color={c.ink2}>{s.tf.toUpperCase()}</T></View>
               {favorite && <Icon sf="star.fill" web="star" size={12} color={c.warn} />}
             </View>
+            {name ? <T kind="caption" color={c.ink3} numberOfLines={1}>{name}</T> : null}
             <T kind="caption" tabular color={c.ink2} numberOfLines={1}>Fib {s.fib} · {fmt(s.nivel)}</T>
           </View>
           <View style={{ flex: 1, minWidth: 0 }}><ConditionStrip setup={s} rules={rules} labels={false} /></View>
@@ -47,6 +48,7 @@ export function SetupRow({ s, favorite, rules, onPress, compact, selected }: {
             </View>
             {favorite && <Icon sf="star.fill" web="star" size={13} color={c.warn} />}
           </View>
+          {name ? <T kind="caption" color={c.ink3} numberOfLines={1}>{name}</T> : null}
           <T kind="footnote" tabular color={c.ink2} numberOfLines={1}>
             Fib {s.fib} · {fmt(s.nivel)} · last {fmt(s.precio)}
           </T>

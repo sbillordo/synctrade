@@ -42,8 +42,9 @@ export default function SetupsScreen() {
       .sort(SORTS[filters.sort].fn);
   }, [results.data, filters, query]);
   const advanced = CONDS.filter((k) => filters.rule[k] !== 'count').length;
-  const uList = universes.data?.length ? universes.data : FALLBACK_UNIVERSES;
-  const uLabel = uList.find((u) => u.id === universe)?.label ?? 'Nasdaq-100';
+  // 'all' = every stored result whatever scan or list it came from (not a scannable universe)
+  const uList = [{ id: 'all', label: 'All sources', count: 0, updated_at: null }, ...(universes.data?.length ? universes.data : FALLBACK_UNIVERSES)];
+  const uLabel = uList.find((u) => u.id === universe)?.label ?? 'All sources';
 
   // the detail pane follows the list: the picked setup while it is visible, otherwise the first one
   const current = wide ? (rows.find((r) => r.ticker === selected?.ticker && r.tf === selected?.tf) ?? rows[0]) : undefined;
@@ -141,7 +142,7 @@ export default function SetupsScreen() {
   } else if (results.isLoading) {
     empty = <Empty title="Loading setups" body="Fetching the last scan from your server." />;
   } else if (!(results.data?.results.length)) {
-    empty = <Empty title={`No scan yet for ${uLabel}`} body="Run a scan to see its setups here." action={<Button label="Go to Scan" onPress={() => router.navigate('/scan')} />} />;
+    empty = <Empty title={universe === 'all' ? 'No results yet' : `No scan yet for ${uLabel}`} body="Run a scan to see its setups here." action={<Button label="Go to Scan" onPress={() => router.navigate('/scan')} />} />;
   } else {
     empty = <Empty title="No setups match" body="Lower the minimum or stop requiring a condition." action={<Button label="Open filters" kind="plain" onPress={() => router.push('/filters')} />} />;
   }

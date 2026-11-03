@@ -78,8 +78,8 @@ def _stale(updated_at: str | None) -> bool:
 
 def get(universe: str, refresh: bool = False, cache=None) -> list[str]:
     """Tickers de un universo. 'cache' (OHLCVCache) solo hace falta para refrescar el NASDAQ completo."""
-    if universe == "favorites":
-        return db.favorites()
+    if universe == "favorites":  # lo guardado y lo de las listas se escanea en cada ejecución
+        return sorted(set(db.favorites()) | set(db.list_tickers()))
     tickers, updated = db.universe_get(universe)
     if tickers and not refresh and not _stale(updated):
         return tickers

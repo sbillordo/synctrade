@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from 'reac
 
 import { Button, Chip, Icon, Row, Section, Segmented, T } from '@/components/ui';
 import { api, getServerUrl, setServerUrl, type Params } from '@/lib/api';
+import { useAppState } from '@/lib/store';
 import { fmt } from '@/lib/conditions';
 import { disablePush, enablePush, pushEnabled } from '@/lib/notifications';
 import { radius, setThemePref, type, type ThemePref, useColors, useThemePref } from '@/lib/theme';
@@ -38,6 +39,7 @@ const THEME_LABELS = ['System', 'Night', 'Day'];
 export default function SettingsScreen() {
   const c = useColors();
   const themePref = useThemePref();
+  const { costs, setCosts } = useAppState();
   const qc = useQueryClient();
   const [url, setUrl] = useState(getServerUrl());
   const [conn, setConn] = useState<string | null>(null);
@@ -108,6 +110,13 @@ export default function SettingsScreen() {
         <Row first>
           <Segmented values={THEME_LABELS} index={THEMES.indexOf(themePref)} onChange={(i) => setThemePref(THEMES[i])} style={{ flex: 1 }} />
         </Row>
+      </Section>
+
+      <Section title="eToro costs" aside="Trade simulator · this device">
+        <Stepper label="Commission" hint="$ per side, real stocks (x1)" value={costs.commission} step={1} min={0} max={5} onChange={(v) => setCosts({ ...costs, commission: v })} />
+        <Stepper label="CFD spread" hint="% per side, leveraged" value={costs.cfdSpread} step={0.05} min={0} max={1} digits={2} onChange={(v) => setCosts({ ...costs, cfdSpread: v })} />
+        <Stepper label="Overnight rate" hint="% a year on the whole exposure · match it to the eToro ticket" value={costs.overnight} step={0.1} min={0} max={30} digits={1} onChange={(v) => setCosts({ ...costs, overnight: v })} />
+        <Stepper label="Currency conversion" hint="% per EUR ↔ USD conversion · 0 with a dollar balance" value={costs.fx} step={0.05} min={0} max={3} digits={2} onChange={(v) => setCosts({ ...costs, fx: v })} />
       </Section>
 
       <Section title="Notifications">

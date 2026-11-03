@@ -12,7 +12,9 @@ backend/
   app/
     core/        indicadores y evaluación (fibo, POC, RSI, EWO, score, plan de trade)
     data/        fuente de datos (yfinance) + caché incremental en Parquet
-    db.py        SQLite: escaneos, últimos resultados, señales, universos, favoritos, ajustes
+    db.py        SQLite: escaneos, últimos resultados, señales, universos, favoritos, alertas, ajustes
+    etoro.py     posiciones abiertas y cerradas de eToro (solo lectura)
+    watch.py     comprobación de alertas de precio
     scanner.py   escaneo completo y ficha de un ticker
     scheduler.py horarios de los escaneos
     notify.py    notificaciones push (Expo Push -> APNs)
@@ -56,6 +58,18 @@ El contenedor escucha solo en `127.0.0.1:8000`; el acceso externo es únicamente
 | 13:35 | 1h · 4h |
 | 16:10 | 1h · 4h · 1d |
 | Sábado 08:00 | refresco de universos |
+| Cada 5 min, 09:30–16:20 | alertas de precio (solo esos tickers) |
+
+## Posiciones (eToro)
+
+La pestaña Portfolio lee las posiciones de la cuenta real de eToro: abiertas con el P&L que calcula eToro y
+operaciones cerradas del último año. Es solo lectura; los stops y TPs los ejecuta y avisa eToro.
+
+1. En [api-portal.etoro.com](https://api-portal.etoro.com): Settings → Trading → API Key Management → Create New Key.
+2. Copia las dos claves en el `.env` del servidor (`ETORO_API_KEY`, `ETORO_USER_KEY`) y reinicia: `docker compose up -d`.
+
+Con esas claves se puede operar en la cuenta: solo en el `.env`, nunca en el repositorio ni en la app.
+Las posiciones de copy trading no se muestran.
 
 Los festivos están en `backend/app/market.py`: revisar cada año contra el calendario oficial de NYSE.
 

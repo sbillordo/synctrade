@@ -11,6 +11,9 @@ STATIC_DIR = Path(os.getenv("STATIC_DIR", Path(__file__).resolve().parents[2] / 
 SCHEDULER_ENABLED = os.getenv("SCHEDULER_ENABLED", "1") == "1"
 SCHEDULED_UNIVERSE = os.getenv("SCHEDULED_UNIVERSE", "nasdaq100")
 ALERT_MIN_COND = int(os.getenv("ALERT_MIN_COND", "5"))   # de 5 condiciones
+# eToro (solo lectura de posiciones). Con estas dos claves se puede operar: solo en el .env del servidor
+ETORO_API_KEY = os.getenv("ETORO_API_KEY", "")
+ETORO_USER_KEY = os.getenv("ETORO_USER_KEY", "")
 
 MARKET_TZ = "America/New_York"
 FIB_RATIOS = [0.382, 0.5, 0.618, 0.786]

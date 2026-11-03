@@ -4,12 +4,16 @@ import { router, Stack } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Switch, useWindowDimensions, View } from 'react-native';
 
+import { ListSheet } from '@/components/list-sheet';
 import { SetupChart } from '@/components/chart';
 import { ConditionStrip } from '@/components/condition-strip';
+import { AlertRow, PositionCard } from '@/components/position-card';
+import { AlertSheet } from '@/components/position-sheets';
 import { TradeCalculator, tradeMath, type TradeInput } from '@/components/trade-calculator';
 import { Button, Empty, Icon, Row, Section, Segmented, T } from '@/components/ui';
 import { api, TIMEFRAMES, type Setup, type TF } from '@/lib/api';
-import { eur, fmt, pct } from '@/lib/conditions';
+import { eur, fmt, money, pct } from '@/lib/conditions';
+import { useNames } from '@/lib/names';
 import { load, save } from '@/lib/storage';
 import { useAppState } from '@/lib/store';
 import { radius, useColors } from '@/lib/theme';
@@ -17,19 +21,41 @@ import { radius, useColors } from '@/lib/theme';
 const s2 = (v: number | null | undefined) => (v == null ? '' : v.toFixed(2));
 
 /** Full page (route) or, with `embedded`, the right pane of the desktop split view. */
-export function TickerDetail({ ticker, tfParam, embedded, onNavigate }: {
-  ticker: string; tfParam?: TF; embedded?: boolean; onNavigate?: (n: { ticker: string; tf: TF }) => void;
+/** eToro time (UTC) as the chart's bar time: New York wall time sent as UTC, a date on 1d (like the server). */
+function chartTime(iso: string, tf: TF): string | number {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date(iso)).map((x) => [x.type, x.value]));
+  if (tf === '1d') return `${parts.year}-${parts.month}-${parts.day}`;
+  return Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute) / 1000;
+}
+
+/** positionId: opened from Portfolio, so that eToro position is drawn on the chart without asking. */
+export function TickerDetail({ ticker, tfParam, embedded, onNavigate, positionId }: {
+  ticker: string; tfParam?: TF; embedded?: boolean; onNavigate?: (n: { ticker: string; tf: TF }) => void; positionId?: number;
 }) {
   const c = useColors();
   const { width } = useWindowDimensions();
   const qc = useQueryClient();
-  const { sequence } = useAppState();
+  const { sequence, costs } = useAppState();
   const detail = useQuery({ queryKey: ['ticker', ticker], queryFn: () => api.ticker(ticker) });
   const favorites = useQuery({ queryKey: ['favorites'], queryFn: api.favorites });
+  const company = useNames([ticker])[ticker];
   const [tf, setTf] = useState<TF>((tfParam as TF) ?? '4h');
-  const [trade, setTrade] = useState<TradeInput>({ amount: load('amount', '1000'), entry: '', stop: '', tp: '' });
+  const [trade, setTrade] = useState<TradeInput>({
+    amount: load('amount', '1000'), entry: '', stop: '', tp: '', leverage: load('leverage', 1), days: load('daysHeld', '5'),
+  });
   const [showPos, setShowPos] = useState<boolean>(load('showPosition', false));
+  const [listOpen, setListOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState<boolean>(load('chartCollapsed', false));
   const [showHist, setShowHist] = useState<boolean>(load('showHistPoc', true));
+  const [alertOpen, setAlertOpen] = useState(false);
+  const portfolio = useQuery({ queryKey: ['portfolio', 'open'], queryFn: () => api.portfolio(), retry: false });
+  const currency = portfolio.data?.currency ?? 'USD';
+  const alertsQ = useQuery({ queryKey: ['alerts'], queryFn: api.alerts });
+  const positions = useMemo(() => (portfolio.data?.positions ?? []).filter((p) => p.ticker === ticker), [portfolio.data, ticker]);
+  const alerts = useMemo(() => (alertsQ.data ?? []).filter((a) => a.ticker === ticker && !a.triggered_at), [alertsQ.data, ticker]);
+  const removeAlert = (id: number) => api.deleteAlert(id).then(() => qc.invalidateQueries({ queryKey: ['alerts'] }));
 
   const d = detail.data;
   const res = (d?.results[tf] ?? null) as Setup | null;
@@ -42,9 +68,16 @@ export function TickerDetail({ ticker, tfParam, embedded, onNavigate }: {
   const [appliedKey, setAppliedKey] = useState('');
   if (priceNow != null && appliedKey !== defaultsKey) {
     setAppliedKey(defaultsKey);
-    setTrade((t) => ({ ...t, entry: s2(priceNow), stop: s2(res?.trade.stop), tp: s2(res?.trade.tp) }));
+    // without a setup there are no suggested levels: start from -5% / +10% so the simulator works right away
+    setTrade((t) => ({
+      ...t, entry: s2(priceNow),
+      stop: res ? s2(res.trade.stop) : s2(priceNow * 0.95),
+      tp: res ? s2(res.trade.tp) : s2(priceNow * 1.1),
+    }));
   }
   useEffect(() => save('amount', trade.amount), [trade.amount]);
+  useEffect(() => save('leverage', trade.leverage), [trade.leverage]);
+  useEffect(() => save('daysHeld', trade.days), [trade.days]);
 
   const favMut = useMutation({
     mutationFn: (on: boolean) => api.setFavorite(ticker, on),
@@ -65,11 +98,22 @@ export function TickerDetail({ ticker, tfParam, embedded, onNavigate }: {
     else router.replace({ pathname: '/ticker/[symbol]', params: { symbol: n.ticker, tf: n.tf } });
   };
 
-  const math = tradeMath(trade, d?.eurusd ?? null);
+  const math = tradeMath(trade, d?.eurusd ?? null, costs);
   const payload = useMemo(() => {
     if (!chart) return null;
+    // the eToro position is drawn instead of the simulation: always when opened from Portfolio, else with the switch
+    const real = positions.find((p) => p.id === positionId) ?? positions[0];
     const num = (v: string) => Number(v.replace(',', '.'));
-    const position = showPos && math.ok
+    const position = real && (showPos || positionId != null)
+      ? {
+          entry: real.open_rate, stop: real.stop ?? null, tp: real.tp ?? null,
+          openTime: real.opened_at ? chartTime(real.opened_at, chart.tf) : null,
+          marker: `${real.is_buy ? 'Buy' : 'Sell'}${real.leverage > 1 ? ` x${real.leverage}` : ''}`,
+          targetLabel: `Target ${fmt(real.tp ?? 0)}${real.at_tp != null ? `\n${money(real.at_tp, currency, 0)}` : ''}`,
+          stopLabel: `Stop ${fmt(real.stop ?? 0)}${real.at_stop != null ? `\n${money(real.at_stop, currency, 0)}` : ''}`,
+          entryLabel: `eToro ${fmt(real.open_rate)}${real.pnl != null ? ` · ${money(real.pnl, currency, 0)}` : ''}`,
+        }
+      : showPos && math.ok
       ? {
           entry: num(trade.entry), stop: num(trade.stop), tp: num(trade.tp),
           targetLabel: `Target ${fmt(num(trade.tp))}\n${pct(math.gainPct, 1)} · ${eur(math.gainEur, 0)}`,
@@ -77,8 +121,8 @@ export function TickerDetail({ ticker, tfParam, embedded, onNavigate }: {
           entryLabel: `R:R ${fmt(math.rr, 1)}`,
         }
       : null;
-    return { chart, colors: c, histPoc: d?.hist_poc ?? null, showHistPoc: showHist, position };
-  }, [chart, c, d?.hist_poc, showHist, showPos, math.ok, math.gainEur, math.lossEur, math.gainPct, math.lossPct, math.rr, trade.entry, trade.stop, trade.tp]);
+    return { chart, colors: c, histPoc: d?.hist_poc ?? null, showHistPoc: showHist, position, alerts: alerts.map((a) => a.price) };
+  }, [chart, c, d?.hist_poc, showHist, showPos, positions, positionId, currency, alerts, math.ok, math.gainEur, math.lossEur, math.gainPct, math.lossPct, math.rr, trade.entry, trade.stop, trade.tp]);
 
   const header = embedded ? null : (
     <Stack.Screen
@@ -152,8 +196,16 @@ export function TickerDetail({ ticker, tfParam, embedded, onNavigate }: {
                 style={styles.star}>
                 <Icon sf={fav ? 'star.fill' : 'star'} web="star" size={24} color={fav ? c.warn : c.ink2} />
               </Pressable>
+              <Pressable
+                onPress={() => setListOpen(true)}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Add to list"
+                style={styles.star}>
+                <Icon sf="text.badge.plus" web="playlist_add" size={24} color={c.ink2} />
+              </Pressable>
             </View>
-            <T kind="subhead" color={c.ink2}>{d.tv_symbol.split(':')[0]}</T>
+            <T kind="subhead" color={c.ink2} numberOfLines={1}>{company ? `${company} · ` : ''}{d.tv_symbol.split(':')[0]}</T>
           </View>
           <View style={{ alignItems: 'flex-end' }}>
             <T kind="title2" tabular>{fmt(d.price_now ?? last)}</T>
@@ -171,25 +223,37 @@ export function TickerDetail({ ticker, tfParam, embedded, onNavigate }: {
           </View>
         )}
 
-        <Segmented
-          values={TIMEFRAMES.map((t) => `${t}  ${d.results[t] ? `${d.results[t]!.cumple}/5` : '–'}`)}
-          index={TIMEFRAMES.indexOf(tf)}
-          onChange={(i) => setTf(TIMEFRAMES[i])}
-        />
+        <View style={styles.tfRow}>
+          <View style={{ flex: 1 }}>
+            <Segmented
+              values={TIMEFRAMES.map((t) => `${t}  ${d.results[t] ? `${d.results[t]!.cumple}/5` : '–'}`)}
+              index={TIMEFRAMES.indexOf(tf)}
+              onChange={(i) => setTf(TIMEFRAMES[i])}
+            />
+          </View>
+          <Pressable
+            onPress={() => { const v = !collapsed; setCollapsed(v); save('chartCollapsed', v); }}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel={collapsed ? 'Show chart and indicators' : 'Hide chart and indicators'}
+            style={[styles.collapseBtn, { backgroundColor: c.surfaceRaised }]}>
+            <Icon sf={collapsed ? 'chevron.down' : 'chevron.up'} web={collapsed ? 'expand_more' : 'expand_less'} size={20} color={c.ink} />
+          </Pressable>
+        </View>
 
-        {payload && (
+        {!collapsed && payload && (
           <View style={{ marginHorizontal: -16 }}>
             <SetupChart payload={payload} height={embedded ? 540 : Math.round(Math.min(560, width * 1.15))} />
           </View>
         )}
-        <View style={styles.legend}>
+        {!collapsed && <View style={styles.legend}>
           <Legend color={c.accent} label={res ? `Fib ${res.fib}` : 'Fib'} />
           <Legend color={c.ink3} label="Other fib" dashed />
           <Legend color={c.warn} label="Swing POC" />
           {d.hist_poc ? <Legend color={c.warn} label="All-time POC" dashed /> : null}
           {res?.gaps.length ? <Legend color={c.down} label="Open gap" box /> : null}
-        </View>
-        {d.hist_poc ? (
+        </View>}
+        {!collapsed && d.hist_poc ? (
           <Section>
             <Row first>
               <View style={{ flex: 1 }}>
@@ -210,16 +274,36 @@ export function TickerDetail({ ticker, tfParam, embedded, onNavigate }: {
           </Section>
         )}
 
-        {res && (
+        {positions.length > 0 && (
+          <View style={{ gap: 8 }}>
+            <T kind="headline" style={{ paddingHorizontal: 4 }}>Your position{positions.length > 1 ? 's' : ''}</T>
+            {positions.map((p) => <PositionCard key={p.id} p={p} currency={currency} />)}
+          </View>
+        )}
+
+        {(res || priceNow != null) && (
           <TradeCalculator
             value={trade}
             onChange={setTrade}
             eurusd={d.eurusd}
-            defaults={{ stop: s2(res.trade.stop), tp: s2(res.trade.tp) }}
-            tpRule={res.trade.tp_rule}
+            costs={costs}
+            defaults={res ? { stop: s2(res.trade.stop), tp: s2(res.trade.tp) } : undefined}
+            tpRule={res?.trade.tp_rule}
             showOnChart={showPos}
             onShowOnChart={(v) => { setShowPos(v); save('showPosition', v); }}
           />
+        )}
+        {(res || priceNow != null) && (
+          <View style={styles.tradeActions}>
+            <View style={{ flex: 1 }}>
+              <Button label="Price alert" kind="plain" onPress={() => setAlertOpen(true)} icon={<Icon sf="bell" web="notifications" size={16} color={c.ink} />} />
+            </View>
+          </View>
+        )}
+        {alerts.length > 0 && (
+          <Section title="Price alerts">
+            {alerts.map((a) => <AlertRow key={a.id} a={a} price={d.price_now} onDelete={() => removeAlert(a.id)} />)}
+          </Section>
         )}
 
         {!embedded && (
@@ -239,6 +323,8 @@ export function TickerDetail({ ticker, tfParam, embedded, onNavigate }: {
         </View>
         {Platform.OS !== 'web' && <View style={{ height: 24 }} />}
       </ScrollView>
+      <ListSheet ticker={ticker} visible={listOpen} onClose={() => setListOpen(false)} />
+      <AlertSheet visible={alertOpen} onClose={() => setAlertOpen(false)} ticker={ticker} price={d.price_now} />
     </>
   );
 }
@@ -264,6 +350,8 @@ const styles = StyleSheet.create({
   star: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   summary: { borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth, padding: 14, gap: 10 },
   summaryHead: { flexDirection: 'row', justifyContent: 'space-between' },
+  tfRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  collapseBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginTop: -6 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   history: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -273,4 +361,5 @@ const styles = StyleSheet.create({
   barBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   tvBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 14, borderRadius: 10 },
   headerBtn: { width: 36, height: 44, alignItems: 'center', justifyContent: 'center' },
+  tradeActions: { flexDirection: 'row', gap: 8, marginTop: -4 },
 });

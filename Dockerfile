@@ -1,6 +1,6 @@
 # Un solo contenedor en ejecución: FastAPI + programador + export web de la app.
 # La etapa Node solo compila la web (npx expo export) y no queda en la imagen final.
-FROM node:22-slim AS web
+FROM node:22.23.4-slim AS web
 WORKDIR /mobile
 COPY mobile/package.json mobile/package-lock.json ./
 RUN npm ci --no-audit --no-fund

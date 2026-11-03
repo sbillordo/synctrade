@@ -10,11 +10,12 @@ import { useColors } from '@/lib/theme';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 60_000, retry: 1 } } });
 
-// Tapping a notification: one setup opens its ticker, several open the list.
+// Tapping a notification: one setup or a price alert opens its ticker, several setups open the list.
 function useNotificationRouting() {
   useEffect(() => {
     if (Platform.OS === 'web') return;
     const open = (data: SetupsPayload | undefined) => {
+      if (data?.type === 'ticker') return router.push({ pathname: '/ticker/[symbol]', params: { symbol: data.ticker } });
       if (data?.type !== 'setups') return;
       const [first] = data.items;
       if (data.items.length === 1 && first) router.push({ pathname: '/ticker/[symbol]', params: { symbol: first.ticker, tf: first.tf } });
